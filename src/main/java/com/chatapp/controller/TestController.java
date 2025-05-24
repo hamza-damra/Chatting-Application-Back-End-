@@ -139,7 +139,7 @@ public class TestController {
                 .orElseGet(() -> {
                     ChatRoom newChatRoom = ChatRoom.builder()
                             .name("Test Chat Room " + roomId)
-                            .isPrivate(false)
+                            .privateFlag(false)
                             .creator(user)
                             .build();
                     newChatRoom.addParticipant(user);

@@ -24,7 +24,7 @@ import lombok.EqualsAndHashCode;
 @Getter
 @Setter
 @ToString(exclude = {"participants", "messages"})
-@EqualsAndHashCode(of = {"id", "name", "isPrivate"})
+@EqualsAndHashCode(of = {"id", "name", "privateFlag"})
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -37,8 +37,8 @@ public class ChatRoom {
     @Column(nullable = false)
     private String name;
 
-    @Column(name = "is_private")
-    private boolean isPrivate;
+    @Column(name = "is_private", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean privateFlag;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -70,7 +70,16 @@ public class ChatRoom {
     }
 
     public boolean isDirectMessage() {
-        return isPrivate && participants.size() == 2;
+        return privateFlag && participants.size() == 2;
+    }
+
+    // Add convenience methods for backward compatibility
+    public boolean isPrivate() {
+        return privateFlag;
+    }
+
+    public void setPrivate(boolean isPrivate) {
+        this.privateFlag = isPrivate;
     }
 
     public void addParticipant(User user) {
@@ -82,12 +91,12 @@ public class ChatRoom {
         participants.remove(user);
         user.getChatRooms().remove(this);
     }
-    
+
     public void addMessage(Message message) {
         messages.add(message);
         message.setChatRoom(this);
     }
-    
+
     public void removeMessage(Message message) {
         messages.remove(message);
         if (message.getChatRoom() == this) {

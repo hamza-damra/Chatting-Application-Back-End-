@@ -78,7 +78,7 @@ public class ChatControllerTest {
         chatRoom = ChatRoom.builder()
                 .id(1L)
                 .name("Test Chat Room")
-                .isPrivate(false)
+                .privateFlag(false)
                 .creator(sender)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -104,17 +104,17 @@ public class ChatControllerTest {
         sessionAttributes = new HashMap<>();
         headerAccessor = mock(SimpMessageHeaderAccessor.class);
         when(headerAccessor.getSessionAttributes()).thenReturn(sessionAttributes);
-        
+
         // Mock the MessageResponse for the messageService
         MessageResponse messageResponse = new MessageResponse();
         messageResponse.setId(1L);
         messageResponse.setContent("Hello, world!");
         messageResponse.setContentType("TEXT");
         when(messageService.sendMessage(any(), any())).thenReturn(messageResponse);
-        
+
         // Ensure chatRoomService.isUserInChatRoom returns true
         when(chatRoomService.isUserInChatRoom(any(), any())).thenReturn(true);
-        
+
         // Mock the addUserToChatRoom method to do nothing
         doNothing().when(chatRoomService).addUserToChatRoom(any(), any());
     }
@@ -153,7 +153,7 @@ public class ChatControllerTest {
         verify(headerAccessor.getSessionAttributes(), times(2)).put(any(), any());
         verify(messagingTemplate).convertAndSend(eq("/topic/chatrooms/" + roomId), any(Object.class));
     }
-    
+
     @Test
     void sendMessage_ShouldThrowException_WhenUserNotInChatRoom() {
         // Arrange

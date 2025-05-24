@@ -1,5 +1,6 @@
 package com.chatapp.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,6 +16,7 @@ import java.util.List;
 public class ChatRoomResponse {
     private Long id;
     private String name;
+    @JsonProperty("isPrivate")
     private boolean isPrivate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

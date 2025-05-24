@@ -73,7 +73,7 @@ public class ChatRoomServiceTest {
         chatRoom = ChatRoom.builder()
                 .id(1L)
                 .name("Test Chat Room")
-                .isPrivate(true)
+                .privateFlag(true)
                 .creator(currentUser)
                 .participants(new HashSet<>(Set.of(currentUser, otherUser)))
                 .createdAt(LocalDateTime.now())
