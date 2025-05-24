@@ -1,0 +1,56 @@
+# Server Configuration
+server:
+  port: 8080
+
+# Spring Configuration
+spring:
+  # Database Configuration
+  datasource:
+    url: jdbc:mysql://localhost:3306/chatapp?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    driverClassName: com.mysql.cj.jdbc.Driver
+    username: root
+    password: # ضع كلمة المرور الخاصة بقاعدة البيانات هنا
+
+  # JPA Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        "[format_sql]": true
+        dialect: org.hibernate.dialect.MySQL8Dialect
+    defer-datasource-initialization: true
+
+  # SQL Initialization
+  sql:
+    init:
+      mode: always
+
+  # WebSocket Configuration
+  websocket:
+    max-text-message-size: 8192
+    max-binary-message-size: 8192
+
+# JWT Configuration
+jwt:
+  secret: 8Zz5tw0Ionm3XPZZfN0NOml3z9FMfmpgXwovR9fp6ryDIoGRM8EPHAB6iHsc0fb
+  expiration: 86400000
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    "[com.chatapp]": DEBUG
+    "[org.springframework]":
+      web: INFO
+      security: INFO
+      "[web.socket]": DEBUG
+
+# CORS Configuration
+cors:
+  allowed-origins: "*"
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  max-age: 3600

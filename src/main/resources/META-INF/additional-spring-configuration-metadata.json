@@ -1,0 +1,44 @@
+{
+  "properties": [
+    {
+      "name": "jwt.secret",
+      "type": "java.lang.String",
+      "description": "Secret key used for JWT token signing and verification."
+    },
+    {
+      "name": "jwt.expiration",
+      "type": "java.lang.Long",
+      "description": "JWT token expiration time in milliseconds."
+    },
+    {
+      "name": "spring.websocket.max-text-message-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum size of WebSocket text messages in bytes."
+    },
+    {
+      "name": "spring.websocket.max-binary-message-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum size of WebSocket binary messages in bytes."
+    },
+    {
+      "name": "cors.allowed-origins",
+      "type": "java.lang.String",
+      "description": "Comma-separated list of origins allowed for CORS."
+    },
+    {
+      "name": "cors.allowed-methods",
+      "type": "java.lang.String",
+      "description": "Comma-separated list of HTTP methods allowed for CORS."
+    },
+    {
+      "name": "cors.allowed-headers",
+      "type": "java.lang.String",
+      "description": "Comma-separated list of HTTP headers allowed for CORS."
+    },
+    {
+      "name": "cors.max-age",
+      "type": "java.lang.Long",
+      "description": "Maximum age (in seconds) of the CORS preflight requests cache."
+    }
+  ]
+}

@@ -1,0 +1,211 @@
+package com.chatapp.service;
+
+import com.chatapp.entity.ChatRoom;
+import com.chatapp.entity.Message;
+import com.chatapp.entity.User;
+import com.chatapp.exception.ChatRoomAccessDeniedException;
+import com.chatapp.exception.ResourceNotFoundException;
+import com.chatapp.repository.ChatRoomRepository;
+import com.chatapp.repository.MessageRepository;
+import com.chatapp.websocket.model.FileChunk;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+/**
+ * Service for handling chunked file uploads via WebSocket
+ */
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class FileChunkService {
+
+    private final ChatRoomRepository chatRoomRepository;
+    private final MessageRepository messageRepository;
+    private final UserService userService;
+    
+    @Value("${app.file-storage.upload-dir:uploads}")
+    private String uploadDir;
+    
+    // In-memory storage for chunks being assembled
+    // Key: unique upload ID, Value: map of chunk index to chunk data
+    private final Map<String, Map<Integer, byte[]>> chunkStorage = new ConcurrentHashMap<>();
+    
+    // Metadata for uploads in progress
+    private final Map<String, FileUploadMetadata> uploadMetadata = new ConcurrentHashMap<>();
+    
+    /**
+     * Process a file chunk and return a message if the file is complete
+     * @param chunk The file chunk to process
+     * @param username The username of the sender
+     * @return A message if the file is complete, null otherwise
+     */
+    @Transactional
+    public Message processChunk(FileChunk chunk, String username) {
+        User currentUser = userService.getUserByUsername(username);
+        
+        // Verify chat room exists and user is a participant
+        ChatRoom chatRoom = chatRoomRepository.findById(chunk.getChatRoomId())
+            .orElseThrow(() -> new ResourceNotFoundException("Chat room not found with id: " + chunk.getChatRoomId()));
+            
+        if (!chatRoom.getParticipants().contains(currentUser)) {
+            throw new ChatRoomAccessDeniedException("You are not a participant in this chat room");
+        }
+        
+        // Generate a unique ID for this upload if it's the first chunk
+        String uploadId;
+        if (chunk.getChunkIndex() == 1) {
+            uploadId = UUID.randomUUID().toString();
+            chunkStorage.put(uploadId, new ConcurrentHashMap<>());
+            
+            // Store metadata about this upload
+            uploadMetadata.put(uploadId, FileUploadMetadata.builder()
+                .fileName(chunk.getFileName())
+                .contentType(chunk.getContentType())
+                .totalChunks(chunk.getTotalChunks())
+                .fileSize(chunk.getFileSize())
+                .chatRoomId(chunk.getChatRoomId())
+                .userId(currentUser.getId())
+                .messageId(chunk.getMessageId())
+                .build());
+                
+            log.info("Started new chunked upload: {} for file: {}, total chunks: {}", 
+                uploadId, chunk.getFileName(), chunk.getTotalChunks());
+        } else {
+            // For subsequent chunks, find the upload ID by matching metadata
+            uploadId = findUploadId(chunk, currentUser.getId());
+            if (uploadId == null) {
+                log.error("Could not find upload ID for chunk: {}", chunk.getChunkIndex());
+                throw new IllegalStateException("Upload not found. Please restart the upload.");
+            }
+        }
+        
+        // Store the chunk
+        byte[] decodedData = Base64.getDecoder().decode(chunk.getData());
+        chunkStorage.get(uploadId).put(chunk.getChunkIndex(), decodedData);
+        
+        log.info("Received chunk {}/{} for upload: {}", 
+            chunk.getChunkIndex(), chunk.getTotalChunks(), uploadId);
+            
+        // Check if we have all chunks
+        FileUploadMetadata metadata = uploadMetadata.get(uploadId);
+        if (chunkStorage.get(uploadId).size() == metadata.getTotalChunks()) {
+            try {
+                // All chunks received, assemble the file
+                String filePath = saveCompleteFile(uploadId);
+                log.info("File upload complete: {}", filePath);
+                
+                // Create a message with the file attachment
+                return createFileMessage(metadata, filePath, currentUser, chatRoom);
+            } catch (IOException e) {
+                log.error("Error saving file", e);
+                throw new RuntimeException("Error saving file: " + e.getMessage());
+            } finally {
+                // Clean up
+                chunkStorage.remove(uploadId);
+                uploadMetadata.remove(uploadId);
+            }
+        }
+        
+        // Not all chunks received yet
+        return null;
+    }
+    
+    /**
+     * Find the upload ID for a chunk by matching metadata
+     */
+    private String findUploadId(FileChunk chunk, Long userId) {
+        return uploadMetadata.entrySet().stream()
+            .filter(entry -> {
+                FileUploadMetadata metadata = entry.getValue();
+                return metadata.getChatRoomId().equals(chunk.getChatRoomId()) &&
+                       metadata.getUserId().equals(userId) &&
+                       metadata.getTotalChunks().equals(chunk.getTotalChunks()) &&
+                       (metadata.getMessageId() == null && chunk.getMessageId() == null ||
+                        metadata.getMessageId() != null && metadata.getMessageId().equals(chunk.getMessageId()));
+            })
+            .map(Map.Entry::getKey)
+            .findFirst()
+            .orElse(null);
+    }
+    
+    /**
+     * Save the complete file to disk
+     */
+    private String saveCompleteFile(String uploadId) throws IOException {
+        FileUploadMetadata metadata = uploadMetadata.get(uploadId);
+        Map<Integer, byte[]> chunks = chunkStorage.get(uploadId);
+        
+        // Create upload directory if it doesn't exist
+        Path uploadPath = Paths.get(uploadDir);
+        if (!Files.exists(uploadPath)) {
+            Files.createDirectories(uploadPath);
+        }
+        
+        // Create a unique filename
+        String fileExtension = "";
+        if (metadata.getFileName().contains(".")) {
+            fileExtension = metadata.getFileName().substring(metadata.getFileName().lastIndexOf("."));
+        }
+        
+        String uniqueFileName = UUID.randomUUID().toString() + fileExtension;
+        String filePath = uploadPath.resolve(uniqueFileName).toString();
+        
+        // Write all chunks to file in order
+        try (FileOutputStream outputStream = new FileOutputStream(new File(filePath))) {
+            for (int i = 1; i <= metadata.getTotalChunks(); i++) {
+                byte[] chunk = chunks.get(i);
+                if (chunk != null) {
+                    outputStream.write(chunk);
+                } else {
+                    throw new IOException("Missing chunk: " + i);
+                }
+            }
+        }
+        
+        return filePath;
+    }
+    
+    /**
+     * Create a message with the file attachment
+     */
+    private Message createFileMessage(FileUploadMetadata metadata, String filePath, User sender, ChatRoom chatRoom) {
+        // If updating an existing message
+        if (metadata.getMessageId() != null) {
+            Message existingMessage = messageRepository.findById(metadata.getMessageId())
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + metadata.getMessageId()));
+                
+            // Update the existing message
+            existingMessage.setAttachmentUrl(filePath);
+            existingMessage.setContentType(metadata.getContentType());
+            existingMessage.setUpdatedAt(LocalDateTime.now());
+            return messageRepository.save(existingMessage);
+        }
+        
+        // Create a new message
+        Message message = Message.builder()
+            .content(metadata.getFileName())
+            .contentType(metadata.getContentType())
+            .attachmentUrl(filePath)
+            .sender(sender)
+            .chatRoom(chatRoom)
+            .sentAt(LocalDateTime.now())
+            .build();
+            
+        return messageRepository.save(message);
+    }
+}

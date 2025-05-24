@@ -1,0 +1,62 @@
+HELP.md
+target/
+!.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+
+### Chat Application Specific ###
+# Uploaded files directory
+uploads/
+# Log files
+*.log
+# Test results
+test_results*.log
+# Batch files (if they contain sensitive info)
+# run.bat
+
+### Database ###
+# H2 database files
+*.db
+*.mv.db
+*.trace.db
+
+### Application Logs ###
+logs/
+spring.log
+
+### IDE History and Local Files ###
+# VSCode history
+.history/
+# Local History
+.lh/
+# IDE specific files
+.vscode/
+.idea/
