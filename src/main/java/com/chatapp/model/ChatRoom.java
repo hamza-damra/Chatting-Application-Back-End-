@@ -37,7 +37,7 @@ public class ChatRoom {
     @Column(nullable = false)
     private String name;
 
-    @Column(name = "is_private")
+    @Column(name = "is_private", nullable = false)
     private boolean isPrivate;
 
     @Column(name = "created_at")
@@ -82,12 +82,12 @@ public class ChatRoom {
         participants.remove(user);
         user.getChatRooms().remove(this);
     }
-    
+
     public void addMessage(Message message) {
         messages.add(message);
         message.setChatRoom(this);
     }
-    
+
     public void removeMessage(Message message) {
         messages.remove(message);
         if (message.getChatRoom() == this) {

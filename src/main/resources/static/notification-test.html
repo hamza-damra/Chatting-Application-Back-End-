@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Notification Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select, textarea, button {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .notification-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .notification-item {
+            background: white;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+        }
+        .notification-item.unread {
+            border-left-color: #dc3545;
+            font-weight: bold;
+        }
+        .websocket-status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+</head>
+<body>
+    <h1>Push Notification Test Page</h1>
+
+    <div class="container">
+        <h2>WebSocket Connection Status</h2>
+        <div id="websocket-status" class="websocket-status disconnected">
+            Disconnected
+        </div>
+        <button onclick="connectWebSocket()">Connect WebSocket</button>
+        <button onclick="disconnectWebSocket()">Disconnect WebSocket</button>
+    </div>
+
+    <div class="container">
+        <h2>Authentication</h2>
+        <div class="form-group">
+            <label for="username">Username:</label>
+            <input type="text" id="username" placeholder="Enter your username">
+        </div>
+        <div class="form-group">
+            <label for="password">Password:</label>
+            <input type="password" id="password" placeholder="Enter your password">
+        </div>
+        <button onclick="login()">Login</button>
+        <div id="auth-result" class="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Send Test Notification</h2>
+        <div class="form-group">
+            <label for="notificationType">Notification Type:</label>
+            <select id="notificationType">
+                <option value="NEW_MESSAGE">New Message</option>
+                <option value="PRIVATE_MESSAGE">Private Message</option>
+                <option value="GROUP_MESSAGE">Group Message</option>
+                <option value="SYSTEM_ANNOUNCEMENT">System Announcement</option>
+                <option value="FILE_SHARED">File Shared</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="notificationTitle">Title:</label>
+            <input type="text" id="notificationTitle" value="Test Notification">
+        </div>
+        <div class="form-group">
+            <label for="notificationContent">Content:</label>
+            <textarea id="notificationContent" rows="3">This is a test notification from the web interface</textarea>
+        </div>
+        <div class="form-group">
+            <label for="priority">Priority:</label>
+            <select id="priority">
+                <option value="LOW">Low</option>
+                <option value="NORMAL" selected>Normal</option>
+                <option value="HIGH">High</option>
+                <option value="URGENT">Urgent</option>
+            </select>
+        </div>
+        <button onclick="sendTestNotification()">Send Test Notification</button>
+        <button onclick="testAllTypes()">Test All Types</button>
+        <div id="send-result" class="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Notification Management</h2>
+        <button onclick="getNotifications()">Get My Notifications</button>
+        <button onclick="getUnreadCount()">Get Unread Count</button>
+        <button onclick="markAllAsRead()">Mark All as Read</button>
+        <button onclick="runBackendDiagnostic()">Run Backend Diagnostic</button>
+        <button onclick="getWebSocketStats()">Get WebSocket Stats</button>
+        <div id="notification-result" class="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Live Notifications</h2>
+        <div id="live-notifications" class="notification-list">
+            <p>Connect WebSocket to see live notifications...</p>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let authToken = null;
+
+        function showResult(elementId, message, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = 'result ' + (isSuccess ? 'success' : 'error');
+        }
+
+        function updateWebSocketStatus(connected) {
+            const statusElement = document.getElementById('websocket-status');
+            if (connected) {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'websocket-status connected';
+            } else {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'websocket-status disconnected';
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = data.token;
+                    showResult('auth-result', `Login successful! Token: ${authToken.substring(0, 20)}...`);
+                } else {
+                    const error = await response.text();
+                    showResult('auth-result', `Login failed: ${error}`, false);
+                }
+            } catch (error) {
+                showResult('auth-result', `Login error: ${error.message}`, false);
+            }
+        }
+
+        function connectWebSocket() {
+            if (!authToken) {
+                showResult('send-result', 'Please login first', false);
+                return;
+            }
+
+            const socket = new SockJS('/ws');
+            stompClient = Stomp.over(socket);
+
+            stompClient.connect(
+                { 'Authorization': 'Bearer ' + authToken },
+                function(frame) {
+                    console.log('Connected: ' + frame);
+                    updateWebSocketStatus(true);
+
+                    // Subscribe to notifications
+                    stompClient.subscribe('/user/notifications', function(notification) {
+                        const data = JSON.parse(notification.body);
+                        addLiveNotification(data);
+                    });
+
+                    // Subscribe to unread count updates
+                    stompClient.subscribe('/user/notifications/unread-count', function(message) {
+                        const data = JSON.parse(message.body);
+                        console.log('Unread count:', data.unreadCount);
+                    });
+                },
+                function(error) {
+                    console.log('WebSocket connection error:', error);
+                    updateWebSocketStatus(false);
+                }
+            );
+        }
+
+        function disconnectWebSocket() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+                updateWebSocketStatus(false);
+            }
+        }
+
+        function addLiveNotification(notification) {
+            const container = document.getElementById('live-notifications');
+            const notificationDiv = document.createElement('div');
+            notificationDiv.className = 'notification-item' + (notification.isRead ? '' : ' unread');
+            notificationDiv.innerHTML = `
+                <strong>${notification.title}</strong><br>
+                <small>${notification.notificationType} - ${notification.priority}</small><br>
+                ${notification.content}<br>
+                <small>Received: ${new Date(notification.createdAt).toLocaleString()}</small>
+            `;
+            container.insertBefore(notificationDiv, container.firstChild);
+        }
+
+        async function sendTestNotification() {
+            if (!authToken) {
+                showResult('send-result', 'Please login first', false);
+                return;
+            }
+
+            const type = document.getElementById('notificationType').value;
+            const title = document.getElementById('notificationTitle').value;
+            const content = document.getElementById('notificationContent').value;
+            const priority = document.getElementById('priority').value;
+
+            try {
+                const response = await fetch(`/api/test/notifications/send-test?type=${type}&title=${encodeURIComponent(title)}&content=${encodeURIComponent(content)}&priority=${priority}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('send-result', JSON.stringify(data, null, 2), data.success);
+            } catch (error) {
+                showResult('send-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function testAllTypes() {
+            if (!authToken) {
+                showResult('send-result', 'Please login first', false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test/notifications/test-all-types', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('send-result', JSON.stringify(data, null, 2), data.success);
+            } catch (error) {
+                showResult('send-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function getNotifications() {
+            if (!authToken) {
+                showResult('notification-result', 'Please login first', false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/notifications?page=0&size=10', {
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('notification-result', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('notification-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function getUnreadCount() {
+            if (!authToken) {
+                showResult('notification-result', 'Please login first', false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/notifications/unread/count', {
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('notification-result', `Unread notifications: ${data.unreadCount}`);
+            } catch (error) {
+                showResult('notification-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function markAllAsRead() {
+            if (!authToken) {
+                showResult('notification-result', 'Please login first', false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/notifications/read-all', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('notification-result', JSON.stringify(data, null, 2));
+            } catch (error) {
+                showResult('notification-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function runBackendDiagnostic() {
+            if (!authToken) {
+                showResult('notification-result', 'Please login first', false);
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/test/notifications/diagnostic', {
+                    headers: {
+                        'Authorization': 'Bearer ' + authToken
+                    }
+                });
+
+                const data = await response.json();
+                showResult('notification-result', JSON.stringify(data, null, 2), data.status === 'SUCCESS');
+            } catch (error) {
+                showResult('notification-result', `Error: ${error.message}`, false);
+            }
+        }
+
+        async function getWebSocketStats() {
+            try {
+                const response = await fetch('/api/test/notifications/websocket-stats');
+                const data = await response.json();
+                showResult('notification-result', JSON.stringify(data, null, 2), response.ok);
+            } catch (error) {
+                showResult('notification-result', `Error: ${error.message}`, false);
+            }
+        }
+    </script>
+</body>
+</html>

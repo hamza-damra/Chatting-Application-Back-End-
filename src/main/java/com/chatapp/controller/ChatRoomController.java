@@ -7,6 +7,7 @@ import com.chatapp.exception.BadRequestException;
 import com.chatapp.service.ChatRoomService;
 import javax.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -17,6 +18,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/chatrooms")
 @RequiredArgsConstructor
+@Slf4j
 public class ChatRoomController {
 
     private final ChatRoomService chatRoomService;
@@ -38,7 +40,11 @@ public class ChatRoomController {
     @PostMapping
     @PreAuthorize("hasRole('USER')")
     public ResponseEntity<ChatRoomResponse> createChatRoom(@Valid @RequestBody ChatRoomRequest request) {
+        log.info("Creating chat room with request: name={}, isPrivate={}, participantIds={}",
+                request.getName(), request.isPrivate(), request.getParticipantIds());
         ChatRoomResponse chatRoom = chatRoomService.createChatRoom(request);
+        log.info("Created chat room response: id={}, name={}, isPrivate={}",
+                chatRoom.getId(), chatRoom.getName(), chatRoom.isPrivate());
         return ResponseEntity.status(HttpStatus.CREATED).body(chatRoom);
     }
 

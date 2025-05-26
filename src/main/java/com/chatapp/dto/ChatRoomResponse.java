@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.List;
 public class ChatRoomResponse {
     private Long id;
     private String name;
+    @JsonProperty("isPrivate")
     private boolean isPrivate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

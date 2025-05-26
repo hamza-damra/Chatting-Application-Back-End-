@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import com.chatapp.config.JwtConfig;
 import com.chatapp.config.WebSocketProperties;
-    import com.chatapp.config.CorsProperties;
+import com.chatapp.config.CorsProperties;
 
 @SpringBootApplication
 @EnableConfigurationProperties({JwtConfig.class, WebSocketProperties.class, CorsProperties.class})

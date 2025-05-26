@@ -112,6 +112,9 @@ public class ChatRoomService {
     public ChatRoomResponse createChatRoom(ChatRoomRequest request) {
         User currentUser = userService.getCurrentUser();
 
+        log.info("SERVICE: Creating chat room - name: {}, isPrivate: {}, participantIds: {}",
+                request.getName(), request.isPrivate(), request.getParticipantIds());
+
         // Check for duplicate private chat rooms
         if (request.isPrivate() && request.getParticipantIds() != null && request.getParticipantIds().size() == 1) {
             // This is a private chat with exactly one other user
@@ -136,6 +139,9 @@ public class ChatRoomService {
                 .participants(new HashSet<>())
                 .build();
 
+        log.info("SERVICE: Built ChatRoom entity - name: {}, isPrivate: {}",
+                chatRoom.getName(), chatRoom.isPrivate());
+
         chatRoom.addParticipant(currentUser);
 
         // Add other participants if provided
@@ -148,6 +154,8 @@ public class ChatRoomService {
 
         ChatRoom savedChatRoom = chatRoomRepository.save(chatRoom);
         log.info("Chat room created: {} by user: {}", savedChatRoom.getName(), currentUser.getUsername());
+        log.info("SERVICE: Saved ChatRoom entity - id: {}, name: {}, isPrivate: {}",
+                savedChatRoom.getId(), savedChatRoom.getName(), savedChatRoom.isPrivate());
 
         return convertToChatRoomResponse(savedChatRoom);
     }

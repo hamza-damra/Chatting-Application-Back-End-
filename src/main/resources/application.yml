@@ -53,12 +53,17 @@ spring:
         - classpath:db/update-charset.sql
         - classpath:db/update-message-schema.sql
         - classpath:db/fix-role-prefixes.sql
+        - classpath:db/create-notification-tables.sql
       continue-on-error: true
 
   # WebSocket Configuration
   websocket:
     max-text-message-size: 5242880    # 5MB for text messages
     max-binary-message-size: 52428800 # 50MB for binary messages
+
+  # Graceful Shutdown Configuration
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
 
 # JWT Configuration
 jwt:
@@ -69,19 +74,21 @@ jwt:
 logging:
   level:
     root: INFO
-    "[com.chatapp]": DEBUG
-    "[com.chatapp.websocket]": DEBUG
-    "[com.chatapp.config]": DEBUG
-    "[com.chatapp.security]": DEBUG
+    "[com.chatapp]": INFO
+    "[com.chatapp.service.NotificationService]": DEBUG
+    "[com.chatapp.websocket.ChatController]": INFO
+    "[com.chatapp.websocket.WebSocketEventListener]": INFO
+    "[com.chatapp.config]": WARN
+    "[com.chatapp.security]": WARN
     "[org.springframework]":
-      web: INFO
-      security: DEBUG
-      "[security.access]": DEBUG
-      "[security.web]": DEBUG
-      "[web.socket]": DEBUG
-      "[messaging.simp]": DEBUG
-      "[messaging.simp.broker]": DEBUG
-      "[messaging.simp.stomp]": DEBUG
+      web: WARN
+      security: WARN
+      "[security.access]": WARN
+      "[security.web]": WARN
+      "[web.socket]": WARN
+      "[messaging.simp]": WARN
+      "[messaging.simp.broker]": WARN
+      "[messaging.simp.stomp]": WARN
 
 # CORS Configuration
 cors:
