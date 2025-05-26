@@ -12,14 +12,14 @@ import java.util.Optional;
 
 @Repository
 public interface ChatRoomRepository extends JpaRepository<ChatRoom, Long> {
-    
+
     List<ChatRoom> findByParticipantsContaining(User user);
-    
-    @Query("SELECT c FROM ChatRoom c WHERE c.isPrivate = true AND :user1 MEMBER OF c.participants AND :user2 MEMBER OF c.participants AND SIZE(c.participants) = 2")
+
+    @Query("SELECT c FROM ChatRoom c WHERE c.privateFlag = true AND :user1 MEMBER OF c.participants AND :user2 MEMBER OF c.participants AND SIZE(c.participants) = 2")
     Optional<ChatRoom> findPrivateChatBetween(@Param("user1") User user1, @Param("user2") User user2);
-    
-    List<ChatRoom> findByIsPrivate(boolean isPrivate);
-    
+
+    List<ChatRoom> findByPrivateFlag(boolean privateFlag);
+
     @Query("SELECT c FROM ChatRoom c WHERE :user MEMBER OF c.participants")
     List<ChatRoom> findAllChatRoomsForUser(@Param("user") User user);
 }

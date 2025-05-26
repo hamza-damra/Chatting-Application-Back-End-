@@ -132,15 +132,20 @@ public class ChatRoomService {
             }
         }
 
+        log.debug("Creating chat room with isPrivate: {}", request.isPrivate());
+
         ChatRoom chatRoom = ChatRoom.builder()
                 .name(request.getName())
-                .isPrivate(request.isPrivate())
+                .privateFlag(request.isPrivate())
                 .creator(currentUser)
                 .participants(new HashSet<>())
                 .build();
 
-        log.info("SERVICE: Built ChatRoom entity - name: {}, isPrivate: {}",
-                chatRoom.getName(), chatRoom.isPrivate());
+        log.debug("ChatRoom built with isPrivate: {}", chatRoom.isPrivate());
+
+        // Additional debug: manually set the field to ensure it's set correctly
+        chatRoom.setPrivate(request.isPrivate());
+        log.debug("ChatRoom after manual setPrivate with isPrivate: {}", chatRoom.isPrivate());
 
         chatRoom.addParticipant(currentUser);
 
@@ -152,10 +157,18 @@ public class ChatRoomService {
             }
         }
 
+        log.debug("ChatRoom before save with isPrivate: {}", chatRoom.isPrivate());
         ChatRoom savedChatRoom = chatRoomRepository.save(chatRoom);
+        log.debug("ChatRoom saved with isPrivate: {}", savedChatRoom.isPrivate());
         log.info("Chat room created: {} by user: {}", savedChatRoom.getName(), currentUser.getUsername());
         log.info("SERVICE: Saved ChatRoom entity - id: {}, name: {}, isPrivate: {}",
                 savedChatRoom.getId(), savedChatRoom.getName(), savedChatRoom.isPrivate());
+
+        // Additional debug: check if the saved entity has the correct value
+        ChatRoom reloadedChatRoom = chatRoomRepository.findById(savedChatRoom.getId()).orElse(null);
+        if (reloadedChatRoom != null) {
+            log.debug("ChatRoom reloaded from DB with isPrivate: {}", reloadedChatRoom.isPrivate());
+        }
 
         return convertToChatRoomResponse(savedChatRoom);
     }
@@ -177,7 +190,7 @@ public class ChatRoomService {
         // Create new private chat
         ChatRoom chatRoom = ChatRoom.builder()
                 .name(currentUser.getUsername() + " & " + otherUser.getUsername())
-                .isPrivate(true)
+                .privateFlag(true)
                 .creator(currentUser)
                 .participants(new HashSet<>())
                 .build();
@@ -317,7 +330,9 @@ public class ChatRoomService {
             }
         }
 
-        return ChatRoomResponse.builder()
+        log.debug("Converting ChatRoom to response - ChatRoom.isPrivate: {}", chatRoom.isPrivate());
+
+        ChatRoomResponse response = ChatRoomResponse.builder()
                 .id(chatRoom.getId())
                 .name(chatRoom.getName())
                 .isPrivate(chatRoom.isPrivate())
@@ -330,5 +345,8 @@ public class ChatRoomService {
                 .lastMessage(lastMessage)
                 .unreadCount(unreadCount)
                 .build();
+
+        log.debug("ChatRoomResponse built with isPrivate: {}", response.isPrivate());
+        return response;
     }
 }

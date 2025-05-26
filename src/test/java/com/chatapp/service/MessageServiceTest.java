@@ -86,7 +86,7 @@ public class MessageServiceTest {
         chatRoom = ChatRoom.builder()
                 .id(1L)
                 .name("Test Chat Room")
-                .isPrivate(false)
+                .privateFlag(false)
                 .creator(currentUser)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -105,7 +105,7 @@ public class MessageServiceTest {
         messageRequest = new MessageRequest();
         messageRequest.setContent("Hello, world!");
         messageRequest.setContentType("TEXT");
-        
+
         userResponse = new UserResponse();
         userResponse.setId(1L);
         userResponse.setUsername("currentuser");
