@@ -35,6 +35,7 @@ public class MessageService {
     private final ChatRoomRepository chatRoomRepository;
     private final MessageStatusService messageStatusService;
     private final DtoConverterService dtoConverterService;
+    private final UserBlockingService userBlockingService;
 
     /**
      * Get message by ID without access control - INTERNAL USE ONLY
@@ -125,6 +126,14 @@ public class MessageService {
         // Verify user is a participant in the chat room
         if (!chatRoom.getParticipants().contains(currentUser)) {
             throw new ChatRoomAccessDeniedException("User is not a participant in this chat room");
+        }
+
+        // Check if user is blocked from sending messages to any participant
+        for (User participant : chatRoom.getParticipants()) {
+            if (!participant.getId().equals(currentUser.getId()) &&
+                !userBlockingService.canSendMessageTo(participant)) {
+                throw new ChatRoomAccessDeniedException("Cannot send message due to blocking restrictions");
+            }
         }
 
         // Check message length (assuming a reasonable limit of 10000 characters)
