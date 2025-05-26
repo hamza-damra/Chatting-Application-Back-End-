@@ -88,7 +88,7 @@ class PushNotificationIntegrationTest {
         // Create test chat room
         chatRoom = ChatRoom.builder()
             .name("Test Room")
-            .isPrivate(false)
+            .privateFlag(false)
             .participants(Set.of(sender, recipient))
             .build();
         chatRoom = chatRoomRepository.save(chatRoom);
@@ -322,7 +322,7 @@ class PushNotificationIntegrationTest {
         // Arrange - create private chat room
         ChatRoom privateRoom = ChatRoom.builder()
             .name("Private Chat")
-            .isPrivate(true)
+            .privateFlag(true)
             .participants(Set.of(sender, recipient))
             .build();
         privateRoom = chatRoomRepository.save(privateRoom);

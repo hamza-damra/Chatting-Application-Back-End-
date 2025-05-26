@@ -70,7 +70,7 @@ class NotificationServiceTest {
         testChatRoom = ChatRoom.builder()
             .id(1L)
             .name("Test Room")
-            .isPrivate(false)
+            .privateFlag(false)
             .participants(Set.of(testUser, senderUser))
             .build();
 
