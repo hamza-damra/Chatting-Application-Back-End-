@@ -62,8 +62,12 @@ public class ChatController {
     public void sendMessage(@DestinationVariable Long roomId,
                            @Payload ChatMessageRequest chatMessageRequest,
                            Principal principal) {
+        log.info("=== WEBSOCKET MESSAGE HANDLER TRIGGERED ===");
         log.info("WEBSOCKET: Received message for room {}: {}", roomId, chatMessageRequest);
         log.info("WEBSOCKET: Principal: {}", principal);
+        log.info("WEBSOCKET: Principal name: {}", principal != null ? principal.getName() : "NULL");
+        log.info("WEBSOCKET: Message content: {}", chatMessageRequest != null ? chatMessageRequest.getContent() : "NULL");
+        log.info("WEBSOCKET: Message content type: {}", chatMessageRequest != null ? chatMessageRequest.getContentType() : "NULL");
 
         // Require authentication for sending messages
         if (principal == null) {
@@ -93,8 +97,10 @@ public class ChatController {
         }
 
         // Save the message to the database
+        log.info("=== STARTING MESSAGE SAVE PROCESS ===");
         log.info("WEBSOCKET: Saving message to database. Sender: {}, ChatRoom: {}, Content: {}",
             sender.getUsername(), chatRoom.getName(), chatMessageRequest.getContent());
+        log.info("WEBSOCKET: Sender ID: {}, ChatRoom ID: {}", sender.getId(), chatRoom.getId());
         Message message;
         try {
             // Make sure the user is saved first
@@ -142,6 +148,7 @@ public class ChatController {
             }
 
             // Create message directly instead of using the service
+            log.info("WEBSOCKET: Creating message object...");
             message = Message.builder()
                 .content(content)
                 .contentType(chatMessageRequest.getContentType())
@@ -150,10 +157,19 @@ public class ChatController {
                 .chatRoom(chatRoom)
                 .sentAt(LocalDateTime.now())
                 .build();
+            log.info("WEBSOCKET: Message object created: {}", message);
 
             // Save directly using repository
+            log.info("WEBSOCKET: About to save message to repository...");
             message = messageRepository.save(message);
             log.info("WEBSOCKET: Message saved successfully with ID: {}", message.getId());
+
+            if (message.getId() == null) {
+                log.error("WEBSOCKET: ERROR - Message ID is null after save!");
+                throw new RuntimeException("Message was not saved properly - ID is null");
+            } else {
+                log.info("WEBSOCKET: SUCCESS - Message saved with ID: {}", message.getId());
+            }
 
             // Create SENT status for the sender
             MessageStatus messageStatus = MessageStatus.builder()
@@ -166,7 +182,10 @@ public class ChatController {
             messageStatus = messageStatusRepository.save(messageStatus);
             log.info("WEBSOCKET: Created message status: {}", messageStatus);
         } catch (Exception e) {
-            log.error("WEBSOCKET: Failed to save message to database", e);
+            log.error("WEBSOCKET: ❌ CRITICAL ERROR - Failed to save message to database", e);
+            log.error("WEBSOCKET: Exception type: {}", e.getClass().getSimpleName());
+            log.error("WEBSOCKET: Exception message: {}", e.getMessage());
+            log.error("WEBSOCKET: Stack trace: ", e);
             throw e;
         }
 
@@ -256,6 +275,9 @@ public class ChatController {
         } catch (Exception e) {
             log.error("WEBSOCKET: Failed to send enhanced push notifications", e);
         }
+
+        log.info("=== WEBSOCKET MESSAGE HANDLER COMPLETED SUCCESSFULLY ===");
+        log.info("WEBSOCKET: Message ID {} sent to {} participants", message.getId(), chatRoom.getParticipants().size());
     }
 
     /**

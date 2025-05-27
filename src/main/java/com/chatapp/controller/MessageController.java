@@ -63,6 +63,15 @@ public class MessageController {
             @PathVariable Long chatRoomId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+
+        // Validate pagination parameters
+        if (page < 0) {
+            page = 0;
+        }
+        if (size <= 0 || size > 100) {
+            size = 20; // Default to reasonable size
+        }
+
         PagedResponse<MessageResponse> messages = messageService.getChatRoomMessages(chatRoomId, page, size);
         return ResponseEntity.ok(messages);
     }
