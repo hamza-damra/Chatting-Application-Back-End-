@@ -4,7 +4,6 @@ import com.chatapp.dto.NotificationResponse;
 import com.chatapp.model.*;
 import com.chatapp.repository.*;
 import com.chatapp.service.NotificationService;
-import com.chatapp.service.NotificationPreferencesService;
 import com.chatapp.service.UserPresenceService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,9 +35,6 @@ class PushNotificationIntegrationTest {
 
     @Autowired
     private NotificationService notificationService;
-
-    @Autowired
-    private NotificationPreferencesService preferencesService;
 
     @Autowired
     private NotificationRepository notificationRepository;

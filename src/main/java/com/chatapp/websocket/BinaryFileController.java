@@ -27,6 +27,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.Principal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
  * Controller for handling binary file uploads via WebSocket
@@ -44,6 +47,12 @@ public class BinaryFileController {
     private final MessageRepository messageRepository;
     private final UserRepository userRepository;
     private final MessageStatusRepository messageStatusRepository;
+
+    // Track upload start times for progress calculation
+    private final Map<String, LocalDateTime> uploadStartTimes = new ConcurrentHashMap<>();
+
+    // Track received bytes for each upload
+    private final Map<String, Long> uploadReceivedBytes = new ConcurrentHashMap<>();
 
     /**
      * Handle file chunk uploads
@@ -78,16 +87,75 @@ public class BinaryFileController {
             log.info("WEBSOCKET: User {} verified as participant in chat room: {}",
                 currentUser.getUsername(), chatRoom.getName());
 
-            // Log chunk details
-            log.info("WEBSOCKET: Processing file chunk - fileName: {}, contentType: {}, fileSize: {} bytes, chunkIndex: {}, totalChunks: {}",
-                chunk.getFileName(), chunk.getContentType(), chunk.getFileSize(), chunk.getChunkIndex(), chunk.getTotalChunks());
+            // Generate upload ID for tracking if not provided
+            String uploadId = chunk.getUploadId();
+            if (uploadId == null) {
+                uploadId = generateUploadId(chunk, currentUser.getId());
+            }
+
+            // Track upload start time for first chunk
+            if (chunk.getChunkIndex() == 1) {
+                uploadStartTimes.put(uploadId, LocalDateTime.now());
+                uploadReceivedBytes.put(uploadId, 0L);
+                log.info("WEBSOCKET: 🚀 STARTING FILE UPLOAD - ID: {} | File: {} | Size: {} | Chunks: {} | User: {}",
+                    uploadId, chunk.getFileName(), formatFileSize(chunk.getFileSize()),
+                    chunk.getTotalChunks(), currentUser.getUsername());
+            }
+
+            // Calculate chunk size (estimate from base64 data)
+            long chunkSize = estimateChunkSize(chunk.getData());
+
+            // Update received bytes
+            Long currentReceivedBytes = uploadReceivedBytes.getOrDefault(uploadId, 0L);
+            currentReceivedBytes += chunkSize;
+            uploadReceivedBytes.put(uploadId, currentReceivedBytes);
+
+            // Calculate progress percentages
+            double chunkProgress = (chunk.getChunkIndex() * 100.0) / chunk.getTotalChunks();
+            double bytesProgress = chunk.getFileSize() > 0 ? (currentReceivedBytes * 100.0) / chunk.getFileSize() : 0;
+
+            // Calculate transfer rate and time estimates
+            LocalDateTime startTime = uploadStartTimes.get(uploadId);
+            double elapsedSeconds = startTime != null ?
+                ChronoUnit.MILLIS.between(startTime, LocalDateTime.now()) / 1000.0 : 0.1;
+            double transferRate = currentReceivedBytes / elapsedSeconds; // bytes per second
+
+            // Estimate time remaining
+            double remainingBytes = chunk.getFileSize() - currentReceivedBytes;
+            double estimatedRemainingSeconds = (transferRate > 0 && remainingBytes > 0) ?
+                remainingBytes / transferRate : 0;
+
+            // Create progress bar visual
+            String progressBar = createProgressBar(chunkProgress);
+            String transferRateStr = formatTransferRate(transferRate);
+            String timeRemainingStr = formatTimeRemaining(estimatedRemainingSeconds);
+
+            // Enhanced chunk logging with progress visualization
+            log.info("WEBSOCKET: 📦 CHUNK RECEIVED {} {}% | File: {} | Chunk: {}/{} | Bytes: {} of {} ({}%) | Rate: {} | ETA: {} | ID: {}",
+                progressBar, String.format("%.2f", chunkProgress),
+                chunk.getFileName(), chunk.getChunkIndex(), chunk.getTotalChunks(),
+                formatFileSize(currentReceivedBytes), formatFileSize(chunk.getFileSize()), String.format("%.2f", bytesProgress),
+                transferRateStr, timeRemainingStr, uploadId);
+
+            // Log milestone progress for key chunks
+            if (chunk.getChunkIndex() == 1 || chunk.getChunkIndex() == chunk.getTotalChunks() ||
+                chunk.getChunkIndex() % Math.max(1, chunk.getTotalChunks() / 10) == 0) {
+                log.info("WEBSOCKET: 🎯 MILESTONE REACHED - {}% complete for upload {} | {} of {} transferred at {}",
+                    String.format("%.2f", chunkProgress), uploadId,
+                    formatFileSize(currentReceivedBytes), formatFileSize(chunk.getFileSize()), transferRateStr);
+            }
 
             // Process the chunk
             String filePath = fileChunkService.processChunk(chunk, currentUser.getId());
 
             // If the file is complete, create a message and send it to all participants
             if (filePath != null) {
-                log.info("WEBSOCKET: File upload complete, creating message for file: {}", filePath);
+                // Clean up tracking data
+                uploadStartTimes.remove(uploadId);
+                uploadReceivedBytes.remove(uploadId);
+
+                log.info("WEBSOCKET: ✅ FILE UPLOAD COMPLETE - ID: {} | File: {} | Path: {}",
+                    uploadId, chunk.getFileName(), filePath);
 
                 // Check if file exists and log detailed information
                 Path filePathObj = Paths.get(filePath);
@@ -173,8 +241,8 @@ public class BinaryFileController {
                 messageStatus = messageStatusRepository.save(messageStatus);
                 log.info("WEBSOCKET: Created message status: {}", messageStatus);
 
-                // Convert to response DTO
-                MessageResponse response = dtoConverterService.convertToMessageResponse(message);
+                // Convert to response DTO with current user context to avoid additional queries
+                MessageResponse response = dtoConverterService.convertToMessageResponse(message, currentUser);
 
                 // Send to the general topic for the chat room
                 messagingTemplate.convertAndSend(
@@ -226,6 +294,94 @@ public class BinaryFileController {
                 "/queue/errors",
                 new FileUploadError("FILE_UPLOAD_ERROR", e.getMessage(), chunk.getChunkIndex(), chunk.getTotalChunks())
             );
+        }
+    }
+
+    /**
+     * Generate a unique upload ID for tracking
+     */
+    private String generateUploadId(FileChunk chunk, Long userId) {
+        return String.format("%s-%s-%d-%d",
+            chunk.getFileName().replaceAll("[^a-zA-Z0-9]", ""),
+            userId,
+            chunk.getTotalChunks(),
+            System.currentTimeMillis());
+    }
+
+    /**
+     * Estimate chunk size from base64 data
+     */
+    private long estimateChunkSize(String base64Data) {
+        if (base64Data == null || base64Data.isEmpty()) {
+            return 0;
+        }
+        // Base64 encoding increases size by ~33%, so decode size is roughly 75% of encoded size
+        return (long) (base64Data.length() * 0.75);
+    }
+
+    /**
+     * Create a visual progress bar
+     */
+    private String createProgressBar(double progressPercent) {
+        int progressBarLength = 20;
+        int completedBars = (int) (progressBarLength * progressPercent / 100);
+        StringBuilder progressBar = new StringBuilder("[");
+        for (int i = 0; i < progressBarLength; i++) {
+            if (i < completedBars) {
+                progressBar.append("=");
+            } else if (i == completedBars && completedBars < progressBarLength) {
+                progressBar.append(">");
+            } else {
+                progressBar.append(" ");
+            }
+        }
+        progressBar.append("]");
+        return progressBar.toString();
+    }
+
+    /**
+     * Format file size in human readable format
+     */
+    private String formatFileSize(Long bytes) {
+        if (bytes == null || bytes == 0) return "0 B";
+
+        String[] units = {"B", "KB", "MB", "GB", "TB"};
+        int unitIndex = 0;
+        double size = bytes.doubleValue();
+
+        while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+        }
+
+        return String.format("%.2f %s", size, units[unitIndex]);
+    }
+
+    /**
+     * Format transfer rate in human readable format
+     */
+    private String formatTransferRate(double bytesPerSecond) {
+        if (bytesPerSecond >= 1_000_000) { // MB/s
+            return String.format("%.2f MB/s", bytesPerSecond / 1_000_000);
+        } else if (bytesPerSecond >= 1_000) { // KB/s
+            return String.format("%.2f KB/s", bytesPerSecond / 1_000);
+        } else { // B/s
+            return String.format("%.0f B/s", bytesPerSecond);
+        }
+    }
+
+    /**
+     * Format time remaining in human readable format
+     */
+    private String formatTimeRemaining(double seconds) {
+        if (seconds <= 0) return "Unknown";
+
+        if (seconds < 60) {
+            return String.format("%.0fs", seconds);
+        } else if (seconds < 3600) {
+            return String.format("%.0fm %.0fs", seconds / 60, seconds % 60);
+        } else {
+            return String.format("%.0fh %.0fm", seconds / 3600, (seconds % 3600) / 60);
         }
     }
 

@@ -380,11 +380,41 @@ public class GlobalExceptionHandler {
                 .timestamp(LocalDateTime.now())
                 .status(HttpStatus.PAYLOAD_TOO_LARGE.value())
                 .error("File Too Large")
-                .message("File size exceeds the maximum allowed limit of 10MB. Please choose a smaller file.")
+                .message("File size exceeds the maximum allowed limit of 1GB. Please choose a smaller file.")
                 .path(request.getDescription(false))
                 .build();
 
         return new ResponseEntity<>(errorResponse, HttpStatus.PAYLOAD_TOO_LARGE);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleIllegalArgumentException(
+            IllegalArgumentException ex, WebRequest request) {
+        log.error("Invalid argument provided: {}", ex.getMessage());
+
+        // Determine if this is a file validation error for better messaging
+        String message = ex.getMessage();
+        String errorType = "Bad Request";
+
+        if (message != null) {
+            if (message.contains("image files are allowed") || message.contains("Content type not allowed")) {
+                errorType = "Invalid File Type";
+            } else if (message.contains("File size") || message.contains("exceed")) {
+                errorType = "File Too Large";
+            } else if (message.contains("File cannot be empty")) {
+                errorType = "Missing File";
+            }
+        }
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .timestamp(LocalDateTime.now())
+                .status(HttpStatus.BAD_REQUEST.value())
+                .error(errorType)
+                .message(message != null ? message : "Invalid request parameters")
+                .path(request.getDescription(false))
+                .build();
+
+        return new ResponseEntity<>(errorResponse, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(java.io.IOException.class)

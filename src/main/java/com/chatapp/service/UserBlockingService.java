@@ -3,7 +3,6 @@ package com.chatapp.service;
 import com.chatapp.dto.BlockUserRequest;
 import com.chatapp.dto.BlockedUserResponse;
 import com.chatapp.exception.BadRequestException;
-import com.chatapp.exception.ResourceNotFoundException;
 import com.chatapp.model.BlockedUser;
 import com.chatapp.model.User;
 import com.chatapp.repository.BlockedUserRepository;
@@ -50,7 +49,7 @@ public class UserBlockingService {
             .build();
 
         blockedUser = blockedUserRepository.save(blockedUser);
-        log.info("USER_BLOCKING: User {} blocked user {}", 
+        log.info("USER_BLOCKING: User {} blocked user {}",
                 currentUser.getUsername(), userToBlock.getUsername());
 
         return BlockedUserResponse.fromEntity(blockedUser);
@@ -70,7 +69,7 @@ public class UserBlockingService {
 
         // Remove block relationship
         blockedUserRepository.deleteByBlockerAndBlocked(currentUser, userToUnblock);
-        log.info("USER_BLOCKING: User {} unblocked user {}", 
+        log.info("USER_BLOCKING: User {} unblocked user {}",
                 currentUser.getUsername(), userToUnblock.getUsername());
     }
 
@@ -94,7 +93,7 @@ public class UserBlockingService {
     public boolean isUserBlocked(Long userId) {
         User currentUser = userService.getCurrentUser();
         User otherUser = userService.getUserById(userId);
-        
+
         return blockedUserRepository.isUserBlocked(currentUser, otherUser);
     }
 

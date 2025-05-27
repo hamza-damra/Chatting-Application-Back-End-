@@ -13,6 +13,7 @@ import com.chatapp.model.MessageStatus;
 import com.chatapp.model.User;
 import com.chatapp.repository.ChatRoomRepository;
 import com.chatapp.repository.MessageRepository;
+import com.chatapp.repository.MessageStatusRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -32,8 +34,8 @@ public class ChatRoomService {
 
     private final ChatRoomRepository chatRoomRepository;
     private final MessageRepository messageRepository;
+    private final MessageStatusRepository messageStatusRepository;
     private final UserService userService;
-    private final MessageStatusService messageStatusService;
     private final DtoConverterService dtoConverterService;
 
     /**
@@ -310,24 +312,33 @@ public class ChatRoomService {
         List<Message> recentMessages = messageRepository.findMostRecentMessagesInChatRoom(
                 chatRoom, PageRequest.of(0, 1));
 
-        // Convert the message to a response if it exists
+        // Convert the message to a response if it exists (with current user context)
         com.chatapp.dto.MessageResponse lastMessage = null;
         if (!recentMessages.isEmpty()) {
-            lastMessage = dtoConverterService.convertToMessageResponse(recentMessages.get(0));
+            lastMessage = dtoConverterService.convertToMessageResponse(recentMessages.get(0), currentUser);
         }
 
-        // Count unread messages for the current user
+        // Count unread messages for the current user using optimized batch query
         int unreadCount = 0;
         List<Message> messages = messageRepository.findByChatRoomOrderBySentAtDesc(chatRoom);
-        for (Message message : messages) {
-            // Don't count messages sent by the current user
-            if (!message.getSender().getId().equals(currentUser.getId())) {
-                // Check if the message has been read by the current user
-                MessageStatus.Status status = messageStatusService.getMessageStatusForUser(message, currentUser);
-                if (status == null || status != MessageStatus.Status.READ) {
-                    unreadCount++;
-                }
-            }
+
+        // Filter out messages sent by current user
+        List<Message> messagesFromOthers = messages.stream()
+            .filter(message -> !message.getSender().getId().equals(currentUser.getId()))
+            .collect(Collectors.toList());
+
+        if (!messagesFromOthers.isEmpty()) {
+            // Batch fetch message statuses to avoid N+1 queries
+            List<MessageStatus> userStatuses = messageStatusRepository.findByMessagesAndUser(messagesFromOthers, currentUser);
+            Set<Long> readMessageIds = userStatuses.stream()
+                .filter(ms -> ms.getStatus() == MessageStatus.Status.READ)
+                .map(ms -> ms.getMessage().getId())
+                .collect(Collectors.toSet());
+
+            // Count messages that are not read
+            unreadCount = (int) messagesFromOthers.stream()
+                .filter(message -> !readMessageIds.contains(message.getId()))
+                .count();
         }
 
         log.debug("Converting ChatRoom to response - ChatRoom.isPrivate: {}", chatRoom.isPrivate());

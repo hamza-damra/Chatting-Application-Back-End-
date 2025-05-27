@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -20,17 +21,25 @@ import java.util.Map;
 public class FileUtils {
 
     private static final Map<String, String> MIME_TYPE_EXTENSIONS = new HashMap<>();
-    
+
     static {
-        // Image files
+        // Standard image files
         MIME_TYPE_EXTENSIONS.put("image/jpeg", ".jpg");
+        MIME_TYPE_EXTENSIONS.put("image/jpg", ".jpg");
         MIME_TYPE_EXTENSIONS.put("image/png", ".png");
         MIME_TYPE_EXTENSIONS.put("image/gif", ".gif");
         MIME_TYPE_EXTENSIONS.put("image/webp", ".webp");
         MIME_TYPE_EXTENSIONS.put("image/svg+xml", ".svg");
         MIME_TYPE_EXTENSIONS.put("image/bmp", ".bmp");
         MIME_TYPE_EXTENSIONS.put("image/tiff", ".tiff");
-        
+        MIME_TYPE_EXTENSIONS.put("image/tif", ".tif");
+        // Additional image formats (Android camera support)
+        MIME_TYPE_EXTENSIONS.put("image/heic", ".heic");
+        MIME_TYPE_EXTENSIONS.put("image/heif", ".heif");
+        // Android device variations
+        MIME_TYPE_EXTENSIONS.put("image/pjpeg", ".jpg");
+        MIME_TYPE_EXTENSIONS.put("image/x-png", ".png");
+
         // Document files
         MIME_TYPE_EXTENSIONS.put("application/pdf", ".pdf");
         MIME_TYPE_EXTENSIONS.put("application/msword", ".doc");
@@ -45,21 +54,21 @@ public class FileUtils {
         MIME_TYPE_EXTENSIONS.put("text/javascript", ".js");
         MIME_TYPE_EXTENSIONS.put("application/json", ".json");
         MIME_TYPE_EXTENSIONS.put("application/xml", ".xml");
-        
+
         // Audio files
         MIME_TYPE_EXTENSIONS.put("audio/mpeg", ".mp3");
         MIME_TYPE_EXTENSIONS.put("audio/wav", ".wav");
         MIME_TYPE_EXTENSIONS.put("audio/ogg", ".ogg");
         MIME_TYPE_EXTENSIONS.put("audio/aac", ".aac");
         MIME_TYPE_EXTENSIONS.put("audio/flac", ".flac");
-        
+
         // Video files
         MIME_TYPE_EXTENSIONS.put("video/mp4", ".mp4");
         MIME_TYPE_EXTENSIONS.put("video/mpeg", ".mpeg");
         MIME_TYPE_EXTENSIONS.put("video/webm", ".webm");
         MIME_TYPE_EXTENSIONS.put("video/quicktime", ".mov");
         MIME_TYPE_EXTENSIONS.put("video/x-msvideo", ".avi");
-        
+
         // Archive files
         MIME_TYPE_EXTENSIONS.put("application/zip", ".zip");
         MIME_TYPE_EXTENSIONS.put("application/x-rar-compressed", ".rar");
@@ -76,12 +85,12 @@ public class FileUtils {
         if (mimeType == null || mimeType.isEmpty()) {
             return "";
         }
-        
+
         // Check for exact match
         if (MIME_TYPE_EXTENSIONS.containsKey(mimeType)) {
             return MIME_TYPE_EXTENSIONS.get(mimeType);
         }
-        
+
         // Check for prefix match (e.g., "image/")
         String prefix = mimeType.split("/")[0] + "/";
         for (Map.Entry<String, String> entry : MIME_TYPE_EXTENSIONS.entrySet()) {
@@ -89,12 +98,12 @@ public class FileUtils {
                 return entry.getValue();
             }
         }
-        
+
         return "";
     }
-    
+
     /**
-     * Calculate MD5 hash of a file
+     * Calculate MD5 hash of a file using streaming to avoid memory issues with large files
      * @param filePath Path to the file
      * @return MD5 hash as a hex string
      * @throws IOException If file cannot be read
@@ -102,9 +111,18 @@ public class FileUtils {
      */
     public static String calculateMD5(Path filePath) throws IOException, NoSuchAlgorithmException {
         MessageDigest md = MessageDigest.getInstance("MD5");
-        md.update(Files.readAllBytes(filePath));
+
+        // Use try-with-resources to ensure InputStream is properly closed
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                md.update(buffer, 0, bytesRead);
+            }
+        }
+
         byte[] digest = md.digest();
-        
+
         // Convert to hex string
         StringBuilder sb = new StringBuilder();
         for (byte b : digest) {
@@ -112,7 +130,7 @@ public class FileUtils {
         }
         return sb.toString();
     }
-    
+
     /**
      * Check if two files have the same content (are duplicates)
      * @param file1 First file
@@ -124,7 +142,7 @@ public class FileUtils {
         if (file1.length() != file2.length()) {
             return false;
         }
-        
+
         try {
             String hash1 = calculateMD5(file1.toPath());
             String hash2 = calculateMD5(file2.toPath());
@@ -134,7 +152,7 @@ public class FileUtils {
             return false;
         }
     }
-    
+
     /**
      * Detect MIME type from file content
      * @param filePath Path to the file

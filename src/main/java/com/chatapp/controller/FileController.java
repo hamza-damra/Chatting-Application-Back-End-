@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -290,56 +291,137 @@ public class FileController {
      * @param messageId The ID of the message containing the file
      * @return The file as a resource
      */
-    @GetMapping("/{messageId}")
-    public ResponseEntity<Resource> getFile(@PathVariable Long messageId) {
+    @GetMapping("/message/{messageId}")
+    @PreAuthorize("hasRole('USER')")
+    public ResponseEntity<Resource> getFileByMessageId(@PathVariable Long messageId) {
         try {
+            log.info("FILE DOWNLOAD: Request for file by message ID: {}", messageId);
+
+            // Get current user for access control
+            User currentUser = userService.getCurrentUser();
+
             // Find the message
             Message message = messageRepository.findById(messageId)
                     .orElseThrow(() -> new ResourceNotFoundException("Message not found with id: " + messageId));
 
-            // Get the file path
-            String attachmentUrl = message.getAttachmentUrl();
-            if (attachmentUrl == null || attachmentUrl.isEmpty()) {
-                throw new ResourceNotFoundException("Message does not have an attachment");
+            // Verify user has access to this message (must be participant in the chat room)
+            if (!message.getChatRoom().getParticipants().contains(currentUser)) {
+                log.error("FILE DOWNLOAD: User {} attempted to access file from chat room {} without being a participant",
+                    currentUser.getUsername(), message.getChatRoom().getName());
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
             }
 
-            log.info("Serving file: {}", attachmentUrl);
+            // Get the file path - check attachmentUrl, fileMetadata, and content field
+            String filePath = null;
+            String fileName = null;
+
+            // First, try to get file path from attachmentUrl (WebSocket uploads)
+            String attachmentUrl = message.getAttachmentUrl();
+            if (attachmentUrl != null && !attachmentUrl.isEmpty()) {
+                filePath = attachmentUrl;
+                fileName = Paths.get(attachmentUrl).getFileName().toString();
+                log.info("FILE DOWNLOAD: Using attachmentUrl from message {}: {}", messageId, attachmentUrl);
+            }
+            // If no attachmentUrl, try to get file path from fileMetadata (REST API uploads)
+            else if (message.getFileMetadata() != null) {
+                FileMetadata fileMetadata = message.getFileMetadata();
+                filePath = fileMetadata.getFilePath();
+                fileName = fileMetadata.getFileName();
+                log.info("FILE DOWNLOAD: Using fileMetadata from message {}: {} (fileName: {})",
+                    messageId, filePath, fileName);
+            }
+            // If neither attachmentUrl nor fileMetadata, check if content field contains a file URL
+            else if (message.getContent() != null && !message.getContent().isEmpty()) {
+                String content = message.getContent();
+                // Check if content looks like a file URL (contains file download endpoint)
+                if (content.contains("/api/files/download/") || content.contains("http")) {
+                    // Extract filename from URL if it's a full URL
+                    if (content.startsWith("http")) {
+                        // Extract the filename from the URL
+                        String[] urlParts = content.split("/");
+                        if (urlParts.length > 0) {
+                            String lastPart = urlParts[urlParts.length - 1];
+                            // Use the filename from URL to find the actual file
+                            FileMetadata fileMetadata = fileMetadataService.findByFileName(lastPart);
+                            if (fileMetadata != null) {
+                                filePath = fileMetadata.getFilePath();
+                                fileName = fileMetadata.getFileName();
+                                log.info("FILE DOWNLOAD: Using content URL from message {} to find file: {} -> {}",
+                                    messageId, content, filePath);
+                            } else {
+                                log.warn("FILE DOWNLOAD: Content URL found but no file metadata for filename: {}", lastPart);
+                            }
+                        }
+                    } else {
+                        // Content might be a relative path or filename
+                        filePath = content;
+                        fileName = Paths.get(content).getFileName().toString();
+                        log.info("FILE DOWNLOAD: Using content as file path from message {}: {}", messageId, content);
+                    }
+                }
+            }
+
+            // If no file path found through any method, return 404
+            if (filePath == null || filePath.isEmpty()) {
+                log.error("FILE DOWNLOAD: Message {} does not have an attachment (no attachmentUrl, fileMetadata, or valid content URL)", messageId);
+                return ResponseEntity.notFound().build();
+            }
+
+            log.info("FILE DOWNLOAD: Serving file from message {}: {}", messageId, filePath);
 
             // Create a resource from the file path
-            Path filePath = Paths.get(attachmentUrl);
-            log.info("Attempting to access file at path: {}", filePath.toAbsolutePath());
+            Path filePathObj = Paths.get(filePath);
+            log.info("FILE DOWNLOAD: Attempting to access file at path: {}", filePathObj.toAbsolutePath());
 
             // Check if the file exists on disk
-            if (!Files.exists(filePath)) {
-                log.error("File does not exist on disk: {}", filePath.toAbsolutePath());
-                throw new ResourceNotFoundException("File not found on disk: " + attachmentUrl);
+            if (!Files.exists(filePathObj)) {
+                log.error("FILE DOWNLOAD: File does not exist on disk: {}", filePathObj.toAbsolutePath());
+                return ResponseEntity.notFound().build();
             }
 
-            Resource resource = new UrlResource(filePath.toUri());
+            Resource resource = new UrlResource(filePathObj.toUri());
 
             // Check if the resource exists and is readable
             if (!resource.exists() || !resource.isReadable()) {
-                log.error("File exists but is not accessible as a resource: {}", filePath.toAbsolutePath());
-                throw new ResourceNotFoundException("File not accessible: " + attachmentUrl);
+                log.error("FILE DOWNLOAD: File exists but is not accessible as a resource: {}", filePathObj.toAbsolutePath());
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
             }
 
             // Determine content type
             String contentType = message.getContentType();
             if (contentType == null || contentType.isEmpty()) {
-                contentType = Files.probeContentType(filePath);
+                contentType = Files.probeContentType(filePathObj);
                 if (contentType == null) {
                     contentType = "application/octet-stream";
                 }
             }
 
+            // Get original filename for download
+            String filename = fileName; // Use the fileName we determined earlier
+            if (filename == null || filename.isEmpty()) {
+                // Fallback to message content or file path filename
+                filename = message.getContent();
+                if (filename == null || filename.isEmpty()) {
+                    filename = filePathObj.getFileName().toString();
+                }
+            }
+
+            log.info("FILE DOWNLOAD: Successfully serving file {} with content type {}", filename, contentType);
+
             // Return the file
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(contentType))
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + message.getContent() + "\"")
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
                     .body(resource);
-        } catch (IOException e) {
-            log.error("Error serving file", e);
+        } catch (ResourceNotFoundException e) {
+            log.error("FILE DOWNLOAD: Resource not found for message {}: {}", messageId, e.getMessage());
             return ResponseEntity.notFound().build();
+        } catch (IOException e) {
+            log.error("FILE DOWNLOAD: Error serving file for message {}", messageId, e);
+            return ResponseEntity.notFound().build();
+        } catch (Exception e) {
+            log.error("FILE DOWNLOAD: Unexpected error serving file for message {}", messageId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 

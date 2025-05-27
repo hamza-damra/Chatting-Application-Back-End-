@@ -73,7 +73,7 @@ public class DebugController {
         info.put("message", "File upload system information");
         info.put("uploadEndpoint", "/api/files/upload");
         info.put("supportedTypes", "image/jpeg, image/png, image/gif, application/pdf, text/plain");
-        info.put("maxFileSize", "10MB");
+        info.put("maxFileSize", "1GB");
         info.put("instructions", "Upload files via REST API first, then send file URL via WebSocket");
         info.put("correctFlow", "1. POST /api/files/upload -> 2. Get file URL -> 3. Send URL via WebSocket");
 

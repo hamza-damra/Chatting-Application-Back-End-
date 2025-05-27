@@ -26,15 +26,13 @@ public class UserManagementService {
     private final UserService userService;
     private final UserBlockingService userBlockingService;
     private final PasswordEncoder passwordEncoder;
-    private final ChatRoomService chatRoomService;
-    private final MessageService messageService;
 
     /**
      * Delete current user's account
      */
     public void deleteCurrentUserAccount(DeleteUserRequest request) {
         User currentUser = userService.getCurrentUser();
-        
+
         // Verify password
         if (!passwordEncoder.matches(request.getPassword(), currentUser.getPassword())) {
             throw new UnauthorizedException("Invalid password");
@@ -48,14 +46,14 @@ public class UserManagementService {
      */
     public void deleteUserAccount(Long userId, String reason, boolean deleteData) {
         User currentUser = userService.getCurrentUser();
-        
+
         // Check if current user is admin
         if (!currentUser.getRoles().contains("ADMIN")) {
             throw new UnauthorizedException("Only administrators can delete other users");
         }
 
         User userToDelete = userService.getUserById(userId);
-        
+
         // Prevent admin from deleting themselves through this method
         if (currentUser.getId().equals(userToDelete.getId())) {
             throw new BadRequestException("Use the self-deletion endpoint to delete your own account");
@@ -69,22 +67,22 @@ public class UserManagementService {
      */
     public void deactivateUserAccount(Long userId, String reason) {
         User currentUser = userService.getCurrentUser();
-        
+
         // Check if current user is admin
         if (!currentUser.getRoles().contains("ADMIN")) {
             throw new UnauthorizedException("Only administrators can deactivate users");
         }
 
         User userToDeactivate = userService.getUserById(userId);
-        
+
         // Add deactivated flag to user (we'll need to add this field to User entity)
         // For now, we'll use a role-based approach
         userToDeactivate.getRoles().add("DEACTIVATED");
         userToDeactivate.setOnline(false);
         userToDeactivate.setLastSeen(LocalDateTime.now());
-        
+
         userRepository.save(userToDeactivate);
-        log.info("USER_MANAGEMENT: User {} deactivated by admin {}. Reason: {}", 
+        log.info("USER_MANAGEMENT: User {} deactivated by admin {}. Reason: {}",
                 userToDeactivate.getUsername(), currentUser.getUsername(), reason);
     }
 
@@ -93,19 +91,19 @@ public class UserManagementService {
      */
     public void reactivateUserAccount(Long userId) {
         User currentUser = userService.getCurrentUser();
-        
+
         // Check if current user is admin
         if (!currentUser.getRoles().contains("ADMIN")) {
             throw new UnauthorizedException("Only administrators can reactivate users");
         }
 
         User userToReactivate = userService.getUserById(userId);
-        
+
         // Remove deactivated flag
         userToReactivate.getRoles().remove("DEACTIVATED");
-        
+
         userRepository.save(userToReactivate);
-        log.info("USER_MANAGEMENT: User {} reactivated by admin {}", 
+        log.info("USER_MANAGEMENT: User {} reactivated by admin {}",
                 userToReactivate.getUsername(), currentUser.getUsername());
     }
 
@@ -120,7 +118,7 @@ public class UserManagementService {
      * Internal method to delete user account
      */
     private void deleteUserAccount(User userToDelete, String reason, boolean deleteData) {
-        log.info("USER_MANAGEMENT: Starting deletion process for user {}. Delete data: {}", 
+        log.info("USER_MANAGEMENT: Starting deletion process for user {}. Delete data: {}",
                 userToDelete.getUsername(), deleteData);
 
         try {
@@ -135,7 +133,7 @@ public class UserManagementService {
                 userRepository.save(userToDelete);
             }
 
-            log.info("USER_MANAGEMENT: User {} deletion completed. Reason: {}", 
+            log.info("USER_MANAGEMENT: User {} deletion completed. Reason: {}",
                     userToDelete.getUsername(), reason);
 
         } catch (Exception e) {
@@ -177,7 +175,7 @@ public class UserManagementService {
 
         // 6. Finally delete the user
         userRepository.delete(user);
-        
+
         log.info("USER_MANAGEMENT: Data cleanup completed for user {}", user.getUsername());
     }
 }

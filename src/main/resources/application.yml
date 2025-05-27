@@ -2,16 +2,16 @@
 server:
   port: 8080
   tomcat:
-    max-http-form-post-size: 10MB
-    max-swallow-size: 10MB
+    max-http-form-post-size: 1GB
+    max-swallow-size: 1GB
 
 # Spring Configuration
 spring:
   # File Upload Configuration
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: 1GB
+      max-request-size: 1GB
       file-size-threshold: 2KB
       enabled: true
 
@@ -54,6 +54,7 @@ spring:
         - classpath:db/update-message-schema.sql
         - classpath:db/fix-role-prefixes.sql
         - classpath:db/create-notification-tables.sql
+        - classpath:db/ensure-profile-picture-column.sql
       continue-on-error: true
 
   # WebSocket Configuration
@@ -77,7 +78,9 @@ logging:
     "[com.chatapp]": INFO
     "[com.chatapp.service.NotificationService]": DEBUG
     "[com.chatapp.websocket.ChatController]": INFO
+    "[com.chatapp.websocket.BinaryFileController]": INFO
     "[com.chatapp.websocket.WebSocketEventListener]": INFO
+    "[com.chatapp.service.FileChunkService]": INFO
     "[com.chatapp.config]": WARN
     "[com.chatapp.security]": WARN
     "[org.springframework]":
@@ -101,18 +104,33 @@ cors:
 app:
   file-storage:
     upload-dir: ${user.dir}/uploads
-    max-file-size: 10485760  # 10MB max file size
+    max-file-size: 1073741824  # 1GB max file size
     allowed-content-types:
+      # Standard image types
       - image/jpeg
+      - image/jpg
       - image/png
       - image/gif
+      - image/webp
+      # Additional image formats (Android camera support)
+      - image/heic
+      - image/heif
+      - image/bmp
+      - image/tiff
+      - image/tif
+      # Android device variations
+      - image/pjpeg
+      - image/x-png
+      # Document types
       - application/pdf
       - application/msword
       - application/vnd.openxmlformats-officedocument.wordprocessingml.document
       - application/vnd.ms-excel
       - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
       - text/plain
+      # Audio types
       - audio/mpeg
       - audio/wav
+      # Video types
       - video/mp4
       - video/mpeg

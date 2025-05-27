@@ -17,6 +17,7 @@ public class MessageResponse {
     private String content;
     private String contentType;
     private String attachmentUrl;
+    private String downloadUrl; // New field for proper download URL
     private UserResponse sender;
     private Long chatRoomId;
     private LocalDateTime sentAt;

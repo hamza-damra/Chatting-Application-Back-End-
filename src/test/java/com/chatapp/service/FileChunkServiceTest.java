@@ -32,13 +32,13 @@ class FileChunkServiceTest {
 
     @Mock
     private FileStorageProperties fileStorageProperties;
-    
+
     @Mock
     private FileMetadataService fileMetadataService;
-    
+
     @Mock
     private UserRepository userRepository;
-    
+
     @Mock
     private FileMetadataRepository fileMetadataRepository;
 
@@ -48,7 +48,7 @@ class FileChunkServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        
+
         // Create subdirectories
         try {
             Path imagesDir = Files.createDirectory(tempDir.resolve("images"));
@@ -57,7 +57,7 @@ class FileChunkServiceTest {
             Path videoDir = Files.createDirectory(tempDir.resolve("video"));
             Path otherDir = Files.createDirectory(tempDir.resolve("other"));
             Files.createDirectory(tempDir.resolve("temp"));
-            
+
             contentTypePaths.put("image/jpeg", imagesDir);
             contentTypePaths.put("image/png", imagesDir);
             contentTypePaths.put("text/plain", documentsDir);
@@ -68,17 +68,17 @@ class FileChunkServiceTest {
         } catch (IOException e) {
             fail("Failed to create test directories: " + e.getMessage());
         }
-        
+
         when(fileStorageProperties.getUploadDir()).thenReturn(tempDir.toString());
         when(fileStorageProperties.isContentTypeAllowed(any())).thenReturn(true);
-        when(fileStorageProperties.getMaxFileSize()).thenReturn(10485760L); // 10MB
-        
+        when(fileStorageProperties.getMaxFileSize()).thenReturn(1073741824L); // 1GB
+
         // Mock the getPathForContentType method
         when(fileStorageProperties.getPathForContentType(any())).thenAnswer(invocation -> {
             String contentType = invocation.getArgument(0);
             return contentTypePaths.getOrDefault(contentType, tempDir.resolve("other"));
         });
-        
+
         // Mock the getSubdirectoryForContentType method
         when(fileStorageProperties.getSubdirectoryForContentType(any())).thenAnswer(invocation -> {
             String contentType = invocation.getArgument(0);
@@ -88,19 +88,19 @@ class FileChunkServiceTest {
             if (contentType.startsWith("video/")) return "video";
             return "other";
         });
-        
+
         // Mock user repository to return a user
         User mockUser = new User();
         mockUser.setId(1L);
         when(userRepository.findById(any())).thenReturn(Optional.of(mockUser));
-        
+
         // Mock fileMetadataService
         when(fileMetadataService.saveFileMetadata(any(FileMetadata.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        
+
         fileChunkService = new FileChunkService(
-            fileStorageProperties, 
-            fileMetadataService, 
-            userRepository, 
+            fileStorageProperties,
+            fileMetadataService,
+            userRepository,
             fileMetadataRepository
         );
     }
@@ -109,7 +109,7 @@ class FileChunkServiceTest {
     void processChunk_shouldReturnNullForFirstChunk() {
         // Arrange
         FileChunk chunk = createTestChunk(1, 2, "test.txt", "text/plain", "Hello");
-        
+
         // Mock the findUploadIdForFirstChunk method
         String uploadId = fileChunkService.findUploadIdForFirstChunk(chunk, 1L);
         chunk.setUploadId(uploadId);
@@ -126,7 +126,7 @@ class FileChunkServiceTest {
         // Arrange
         FileChunk chunk1 = createTestChunk(1, 2, "test.txt", "text/plain", "Hello");
         FileChunk chunk2 = createTestChunk(2, 2, "test.txt", "text/plain", " World");
-        
+
         // Set the same uploadId for both chunks to ensure they're treated as part of the same upload
         String uploadId = fileChunkService.findUploadIdForFirstChunk(chunk1, 1L);
         chunk1.setUploadId(uploadId);
@@ -156,10 +156,10 @@ class FileChunkServiceTest {
     void findUploadIdForFirstChunk_shouldReturnUniqueId() {
         // Arrange
         FileChunk chunk = createTestChunk(1, 2, "test.txt", "text/plain", "Hello");
-        
+
         // Act
         String uploadId = fileChunkService.findUploadIdForFirstChunk(chunk, 1L);
-        
+
         // Assert
         assertNotNull(uploadId, "Should return a non-null upload ID");
         assertTrue(uploadId.length() > 0, "Upload ID should not be empty");

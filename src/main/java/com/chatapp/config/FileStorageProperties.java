@@ -15,12 +15,23 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "app.file-storage")
 public class FileStorageProperties {
     private String uploadDir = "uploads";
-    private long maxFileSize = 10485760; // 10MB default
+    private long maxFileSize = 1073741824; // 1GB default
     private List<String> allowedContentTypes = java.util.Arrays.asList(
-        "image/jpeg", "image/png", "image/gif", "application/pdf",
-        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        // Standard image types
+        "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+        // Additional image formats (Android camera support)
+        "image/heic", "image/heif", "image/bmp", "image/tiff", "image/tif",
+        // Android device variations
+        "image/pjpeg", "image/x-png",
+        // Document types
+        "application/pdf", "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        "text/plain", "audio/mpeg", "audio/wav", "video/mp4", "video/mpeg"
+        "text/plain",
+        // Audio types
+        "audio/mpeg", "audio/wav",
+        // Video types
+        "video/mp4", "video/mpeg"
     );
 
     // Map of content type prefixes to subdirectories
@@ -89,12 +100,12 @@ public class FileStorageProperties {
         if (contentType == null) {
             return "other";
         }
-        
+
         // Special handling for video files
         if (contentType.startsWith("video/")) {
             return "video";
         }
-        
+
         // First check for exact matches
         if (contentTypeDirectories.containsKey(contentType)) {
             return contentTypeDirectories.get(contentType);
@@ -121,7 +132,7 @@ public class FileStorageProperties {
         if (contentType != null && contentType.startsWith("video/")) {
             return Paths.get(uploadDir).resolve("video");
         }
-        
+
         String subdirectory = getSubdirectoryForContentType(contentType);
         return Paths.get(uploadDir).resolve(subdirectory);
     }

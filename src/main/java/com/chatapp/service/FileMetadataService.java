@@ -13,9 +13,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -415,10 +417,12 @@ public class FileMetadataService {
             String uniqueId = java.util.UUID.randomUUID().toString().substring(0, 8);
             String filename = timestamp + "-" + originalFilename + "-" + uniqueId + fileExtension;
 
-            // Save file to disk
+            // Save file to disk using try-with-resources to ensure InputStream is closed
             Path filePath = uploadDir.resolve(filename);
-            Files.copy(file.getInputStream(), filePath);
-            log.info("SAVE FILE: File saved to: {}", filePath.toAbsolutePath());
+            try (InputStream inputStream = file.getInputStream()) {
+                Files.copy(inputStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+                log.info("SAVE FILE: File saved to: {}", filePath.toAbsolutePath());
+            }
 
             // Register file in database
             FileMetadata metadata = registerFile(
