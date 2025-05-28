@@ -24,4 +24,9 @@ public class ChatRoomResponse {
     private List<UserResponse> participants;
     private MessageResponse lastMessage;
     private int unreadCount;
+
+    // Flat fields for Flutter compatibility
+    private String lastMessageContent;
+    private String lastMessageSender;
+    private LocalDateTime lastMessageTime;
 }

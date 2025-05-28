@@ -68,6 +68,7 @@ public class ChatRoomServiceTest {
                 .id(2L)
                 .username("otheruser")
                 .email("other@example.com")
+                .fullName("Other User")
                 .build();
 
         chatRoom = ChatRoom.builder()
@@ -151,5 +152,13 @@ public class ChatRoomServiceTest {
 
         // Verify the unread count (1 unread + 1 delivered = 2 total unread messages)
         assertEquals(2, response.getUnreadCount());
+
+        // Verify the flat fields for Flutter compatibility
+        assertNotNull(response.getLastMessageContent());
+        assertEquals(lastMessage.getContent(), response.getLastMessageContent());
+        assertNotNull(response.getLastMessageSender());
+        assertEquals(otherUser.getFullName(), response.getLastMessageSender());
+        assertNotNull(response.getLastMessageTime());
+        assertEquals(lastMessage.getSentAt(), response.getLastMessageTime());
     }
 }

@@ -190,7 +190,7 @@ public class UnreadMessageService {
             if (latestMessage != null) {
                 response.setLatestMessageId(latestMessage.getId());
                 response.setLatestMessageContent(truncateContent(latestMessage.getContent()));
-                response.setLatestMessageSender(latestMessage.getSender().getUsername());
+                response.setLatestMessageSender(latestMessage.getSender().getFullName());
             }
 
             // Send to user's unread count queue

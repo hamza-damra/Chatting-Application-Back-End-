@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -314,8 +315,18 @@ public class ChatRoomService {
 
         // Convert the message to a response if it exists (with current user context)
         com.chatapp.dto.MessageResponse lastMessage = null;
+        String lastMessageContent = null;
+        String lastMessageSender = null;
+        LocalDateTime lastMessageTime = null;
+
         if (!recentMessages.isEmpty()) {
-            lastMessage = dtoConverterService.convertToMessageResponse(recentMessages.get(0), currentUser);
+            Message recentMessage = recentMessages.get(0);
+            lastMessage = dtoConverterService.convertToMessageResponse(recentMessage, currentUser);
+
+            // Extract flat fields for Flutter compatibility
+            lastMessageContent = recentMessage.getContent();
+            lastMessageSender = recentMessage.getSender().getFullName();
+            lastMessageTime = recentMessage.getSentAt();
         }
 
         // Count unread messages for the current user using optimized batch query
@@ -355,6 +366,10 @@ public class ChatRoomService {
                         .collect(Collectors.toList()))
                 .lastMessage(lastMessage)
                 .unreadCount(unreadCount)
+                // Add flat fields for Flutter compatibility
+                .lastMessageContent(lastMessageContent)
+                .lastMessageSender(lastMessageSender)
+                .lastMessageTime(lastMessageTime)
                 .build();
 
         log.debug("ChatRoomResponse built with isPrivate: {}", response.isPrivate());
